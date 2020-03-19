@@ -1,7 +1,7 @@
-mod video;
-mod pipeline_data;
 mod controller;
+mod pipeline_data;
+mod video;
 
-pub use video::{VideoPlayer};
-pub use pipeline_data::{PipelineData, PipelineState, Timeline, TimelineFractionLens};
-pub (crate) use controller::Controller;
+pub(crate) use controller::Controller;
+pub use pipeline_data::{PipelineData, PipelineState, Timeline};
+pub use video::VideoPlayer;

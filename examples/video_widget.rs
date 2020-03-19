@@ -1,4 +1,4 @@
-use druid_media::{VideoPlayer, PipelineData};
+use druid_media::{PipelineData, VideoPlayer};
 
 use druid::widget::{Align, Button, Flex, Label, Padding, WidgetExt};
 use druid::{AppLauncher, LocalizedString, Widget, WindowDesc};
@@ -15,5 +15,5 @@ fn main() {
 }
 
 fn ui_builder() -> impl Widget<PipelineData> {
-    VideoPlayer::new("file:///F:/Movies/Frozen II.mkv")
+    VideoPlayer::new("file:///F:/Downloads/Pictures/2019-12/DASH_720.mp4")
 }
