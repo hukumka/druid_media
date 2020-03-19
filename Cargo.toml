@@ -1,0 +1,14 @@
+[package]
+name = "druid_media"
+version = "0.1.0"
+authors = ["hukumka <hukumka212@gmail.com>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+druid = {git = "https://github.com/xi-editor/druid", features = ["image"]}
+
+gstreamer = "0.15"
+gstreamer-app = "0.15"
+gstreamer-video = "0.15"
