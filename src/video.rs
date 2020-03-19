@@ -14,7 +14,7 @@ pub struct VideoPlayer {
 }
 
 impl VideoPlayer {
-    pub fn new(uri: &'static str) -> impl Widget<PipelineData> {
+    pub fn new(uri: &str) -> impl Widget<PipelineData> {
         let (pipeline, player) = Self::build_player(uri);
         let controller = Controller::new(pipeline);
 
@@ -23,7 +23,7 @@ impl VideoPlayer {
             .with_child(controller, 0.0)
     }
 
-    fn build_player(uri: &'static str) -> (Pipeline, VideoPlayer) {
+    fn build_player(uri: &str) -> (Pipeline, VideoPlayer) {
         let sample = Arc::new(Mutex::new(None));
         let shared_sample = Arc::clone(&sample);
         let shared_sample_preroll = Arc::clone(&sample);
