@@ -34,15 +34,33 @@ impl Controller<()> {
         // Toggle play button
         let play_pause = Button::new(
             |data: &PipelineState, _env: &_| match data {
-                PipelineState::Play => "Pause".into(),
-                PipelineState::Pause => "Play".into(),
+                PipelineState::Play => "⏸️".into(),
+                PipelineState::Pause => "▶".into(),
             },
             |_ctx, _data: &mut PipelineState, _env| {},
         )
-        .fix_width(100.0)
+        .fix_width(40.0)
         .lens(PipelineData::state);
-        // Timeline slider
         let timeline_slider = Slider::new().lens(PipelineData::timeline.then(Timeline::frac));
+        let muted_button = Button::new(
+            |data: &PipelineData, _env: &_| {
+                if data.muted {
+                    "🔈x".to_string()
+                }else if data.volume < 0.01 {
+                    "🔈".to_string()
+                }else if data.volume < 0.3 {
+                    "🔉".to_string()
+                }else{
+                    "🔊".to_string()
+                }
+            },
+            |_ctx, data: &mut PipelineData, _env| {
+                data.muted = !data.muted;
+            },
+        ).fix_width(40.0);
+        let volume_slider = Slider::new()
+            .lens(PipelineData::volume)
+            .fix_width(100.0);
         let controller = Controller {
             pipeline,
             timer_id: TimerToken::INVALID,
@@ -51,7 +69,9 @@ impl Controller<()> {
         };
         Flex::row()
             .with_child(controller, 0.0)
-            .with_child(timeline_slider, 1.0)
+            .with_child(timeline_slider, 0.8)
+            .with_child(muted_button, 0.0)
+            .with_child(volume_slider, 0.0)
     }
 }
 
@@ -101,6 +121,13 @@ impl<W: Widget<PipelineData>> Widget<PipelineData> for Controller<W> {
             self.pipeline
                 .seek_simple(SeekFlags::FLUSH, position)
                 .unwrap();
+        }
+        // Update volume
+        if old_data.volume != data.volume {
+            self.pipeline.set_property("volume", &data.volume).unwrap();
+        }
+        if old_data.muted != data.muted {
+            self.pipeline.set_property("mute", &data.muted).unwrap();
         }
         self.inner.update(ctx, old_data, data, env)
     }

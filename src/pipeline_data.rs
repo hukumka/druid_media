@@ -4,7 +4,10 @@ use druid::{Data, Lens};
 pub struct PipelineData {
     pub(crate) state: PipelineState,
     pub(crate) timeline: Timeline,
+    pub(crate) volume: f64,
+    pub(crate) muted: bool,
 }
+
 
 #[derive(Lens, Copy, Clone, PartialEq, Debug)]
 pub struct Timeline {
@@ -23,6 +26,8 @@ impl PipelineData {
         PipelineData {
             state: PipelineState::Pause,
             timeline: Timeline::new(),
+            volume: 1.0,
+            muted: false,
         }
     }
 }
