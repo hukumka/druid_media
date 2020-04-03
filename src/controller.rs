@@ -41,7 +41,7 @@ impl Controller<()> {
         )
         .fix_width(100.0)
         .lens(PipelineData::state);
-        // Timeline splider
+        // Timeline slider
         let timeline_slider = Slider::new().lens(PipelineData::timeline.then(Timeline::frac));
         let controller = Controller {
             pipeline,
