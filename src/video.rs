@@ -34,7 +34,7 @@ impl VideoPlayer {
         let pipeline = gstreamer::ElementFactory::make("playbin", None).unwrap();
         let appsink = gstreamer::ElementFactory::make("appsink", Some("sink")).unwrap();
 
-        let pipeline = pipeline.dynamic_cast::<gstreamer::Pipeline>().unwrap();
+        let pipeline = pipeline.dynamic_cast::<Pipeline>().unwrap();
        
         let appsink: AppSink = appsink.dynamic_cast().unwrap();
         // Force RGBA pixel format, since it's only one druid supports
