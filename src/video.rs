@@ -60,8 +60,8 @@ impl VideoPlayer {
                     }
                     Ok(gstreamer::FlowSuccess::Ok)
                 })
-                .eos(move |x| {
-                    println!("EOS");
+                .eos(move |_x| {
+                    println!("End of stream.");
                 })
                 .build(),
         );

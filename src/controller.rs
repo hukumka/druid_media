@@ -71,27 +71,22 @@ impl<W: Widget<PipelineData>> Widget<PipelineData> for Controller<W> {
         data: &PipelineData,
         env: &Env,
     ) {
-        println!("{:?}", self.pipeline.get_state(ClockTime::from_mseconds(10)));
         match (old_data.state, data.state) {
             (PipelineState::Pause, PipelineState::Play) => {
-                let change = self.pipeline.set_state(gstreamer::State::Playing).unwrap();
-                println!("Pause -> Play: {:?}", change);
+                self.pipeline.set_state(gstreamer::State::Playing).unwrap();
             }
             (PipelineState::Play, PipelineState::Pause) => {
-                let change = self.pipeline.set_state(gstreamer::State::Paused).unwrap();
-                println!("Play -> Pause: {:?}", change);
+                self.pipeline.set_state(gstreamer::State::Paused).unwrap();
             }
             _ => {}
         }
         if self.updated_time != data.timeline {
-            println!("{:?} -> {:?}", self.updated_time, data.timeline);
             self.updated_time = data.timeline;
             let time = data.timeline.frac * data.timeline.duration;
             let position = ClockTime::from_nseconds(time as u64);
-            let res = self.pipeline
+            self.pipeline
                 .seek_simple(SeekFlags::FLUSH, position)
                 .unwrap();
-            println!("Seeking: {:?}", res);
         }
         self.inner.update(ctx, old_data, data, env)
     }
