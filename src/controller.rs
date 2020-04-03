@@ -8,16 +8,28 @@ use druid::{
 use gstreamer::{prelude::*, ClockTime, Pipeline, SeekFlags};
 use std::time::{Duration, Instant};
 
+/// Widget to control media playing
 pub struct Controller<W> {
+    /// Underlying pipeline
     pipeline: Pipeline,
 
+    /// Time "expected" for pipeline to be in.
+    /// Used to distinguish between cases of time 
+    /// being updated because media is played, or
+    /// because of manual seeking.
     updated_time: Timeline,
+
+    /// Timer to update timeline position
     timer_id: TimerToken,
 
+    /// Inner button
     inner: W,
 }
 
 impl Controller<()> {
+    /// Create new widget to controll pipeline playing.
+    /// 
+    /// Contains Play/Pause button and timeline position slider.
     pub fn new(pipeline: Pipeline) -> impl Widget<PipelineData> {
         // Toggle play button
         let play_pause = Button::new(
@@ -71,6 +83,7 @@ impl<W: Widget<PipelineData>> Widget<PipelineData> for Controller<W> {
         data: &PipelineData,
         env: &Env,
     ) {
+        // Update pipeline state if needed
         match (old_data.state, data.state) {
             (PipelineState::Pause, PipelineState::Play) => {
                 self.pipeline.set_state(gstreamer::State::Playing).unwrap();
@@ -80,6 +93,7 @@ impl<W: Widget<PipelineData>> Widget<PipelineData> for Controller<W> {
             }
             _ => {}
         }
+        // Update timeline position if needed
         if self.updated_time != data.timeline {
             self.updated_time = data.timeline;
             let time = data.timeline.frac * data.timeline.duration;
@@ -102,6 +116,9 @@ impl<W: Widget<PipelineData>> Widget<PipelineData> for Controller<W> {
                 self.timer_id = ctx.request_timer(deadline);
             }
             Event::MouseDown(_) => {
+                // Hack
+                // State managed by handing event instead of using button this widget contains
+                // to start timer events.
                 if data.state == PipelineState::Pause {
                     data.state = PipelineState::Play;
                     // Schedule timeline updates

@@ -9,11 +9,14 @@ use gstreamer::{prelude::*, Pipeline};
 use gstreamer_app::AppSink;
 use std::sync::{Arc, Mutex};
 
+/// Video playing widget
 pub struct VideoPlayer {
+    /// Current sample to display. Updated via pipeline callbacks
     sample: Arc<Mutex<Option<gstreamer::Sample>>>,
 }
 
 impl VideoPlayer {
+    /// Create new video player with controller below.
     pub fn new(uri: &str) -> impl Widget<PipelineData> {
         let (pipeline, player) = Self::build_player(uri);
         let controller = Controller::new(pipeline);
@@ -35,15 +38,14 @@ impl VideoPlayer {
        
         let appsink: AppSink = appsink.dynamic_cast().unwrap();
         // Force RGBA pixel format, since it's only one druid supports
-        // (Rgb being converted into rgba under the hood)
+        // (it does support Rgb, but it being converted into rgba under the hood, so no point in using it)
         let caps = gstreamer::Caps::builder("video/x-raw")
             .field("format", &gstreamer_video::VideoFormat::Rgba.to_string())
             .field("pixel-aspect-ratio", &gstreamer::Fraction::from((1, 1)))
             .build();
         appsink.set_caps(Some(&caps));
         // Set callback to update current sample.
-        // Superiour to pulling in gui thread, since it avoids back pressure if
-        // gui thread lags for some reason
+        // Superiour to pulling in gui thread, since it avoids blocking gui thread until next frame arrives
         appsink.set_callbacks(
             gstreamer_app::AppSinkCallbacks::new()
                 .new_sample(move |x| {
