@@ -32,7 +32,7 @@ impl VideoPlayer {
         let appsink = gstreamer::ElementFactory::make("appsink", Some("sink")).unwrap();
 
         let pipeline = pipeline.dynamic_cast::<gstreamer::Pipeline>().unwrap();
-
+       
         let appsink: AppSink = appsink.dynamic_cast().unwrap();
         // Force RGBA pixel format, since it's only one druid supports
         // (Rgb being converted into rgba under the hood)
@@ -59,6 +59,9 @@ impl VideoPlayer {
                         *guard = Some(sample);
                     }
                     Ok(gstreamer::FlowSuccess::Ok)
+                })
+                .eos(move |x| {
+                    println!("EOS");
                 })
                 .build(),
         );

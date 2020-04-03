@@ -71,22 +71,27 @@ impl<W: Widget<PipelineData>> Widget<PipelineData> for Controller<W> {
         data: &PipelineData,
         env: &Env,
     ) {
+        println!("{:?}", self.pipeline.get_state(ClockTime::from_mseconds(10)));
         match (old_data.state, data.state) {
             (PipelineState::Pause, PipelineState::Play) => {
-                self.pipeline.set_state(gstreamer::State::Playing).unwrap();
+                let change = self.pipeline.set_state(gstreamer::State::Playing).unwrap();
+                println!("Pause -> Play: {:?}", change);
             }
             (PipelineState::Play, PipelineState::Pause) => {
-                self.pipeline.set_state(gstreamer::State::Paused).unwrap();
+                let change = self.pipeline.set_state(gstreamer::State::Paused).unwrap();
+                println!("Play -> Pause: {:?}", change);
             }
             _ => {}
         }
         if self.updated_time != data.timeline {
+            println!("{:?} -> {:?}", self.updated_time, data.timeline);
             self.updated_time = data.timeline;
             let time = data.timeline.frac * data.timeline.duration;
             let position = ClockTime::from_nseconds(time as u64);
-            self.pipeline
+            let res = self.pipeline
                 .seek_simple(SeekFlags::FLUSH, position)
                 .unwrap();
+            println!("Seeking: {:?}", res);
         }
         self.inner.update(ctx, old_data, data, env)
     }
@@ -104,15 +109,13 @@ impl<W: Widget<PipelineData>> Widget<PipelineData> for Controller<W> {
             Event::MouseDown(_) => {
                 if data.state == PipelineState::Pause {
                     data.state = PipelineState::Play;
+                    // Schedule timeline updates
+                    let deadline = Instant::now() + Duration::from_millis(16);
+                    self.timer_id = ctx.request_timer(deadline);
                 }else{
                     data.state = PipelineState::Pause;
                 }
                 ctx.request_paint();
-                self.updated_time = get_timeline(&self.pipeline);
-                data.timeline.duration = self.updated_time.duration;
-
-                let deadline = Instant::now() + Duration::from_millis(16);
-                self.timer_id = ctx.request_timer(deadline);
             }
             _ => {}
         }

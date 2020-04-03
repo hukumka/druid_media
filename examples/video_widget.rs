@@ -1,8 +1,13 @@
 use druid_media::{PipelineData, VideoPlayer};
 
-use druid::widget::{Align, Button, Flex, Label, Padding, WidgetExt};
-use druid::{AppLauncher, LocalizedString, Widget, WindowDesc};
+use druid::{AppLauncher, Widget, WindowDesc};
 use gstreamer;
+
+const URI_EXAMPLES: [&'static str; 3] = [
+    "https://matrix-client.matrix.org/_matrix/media/r0/download/matrix.org/IYfzAwoWvuyEnVTBvKZMcOCh",
+    "file:///F:/Downloads/Pictures/2019-12/DASH_720.mp4",
+    "https://www.freedesktop.org/software/gstreamer-sdk/data/media/sintel_cropped_multilingual.webm",
+];
 
 fn main() {
     gstreamer::init().unwrap();
@@ -15,5 +20,5 @@ fn main() {
 }
 
 fn ui_builder() -> impl Widget<PipelineData> {
-    VideoPlayer::new("file:///F:/Downloads/Pictures/2019-12/DASH_720.mp4")
+    VideoPlayer::new(URI_EXAMPLES[0])
 }
