@@ -5,8 +5,17 @@ use druid::{
     BoxConstraints, Env, Event, EventCtx, LayoutCtx, LifeCycle, LifeCycleCtx, PaintCtx, Size,
     TimerToken, UpdateCtx, Widget,
 };
-use gstreamer::{prelude::*, ClockTime, Pipeline, SeekFlags};
+use gstreamer::{self as gst, prelude::*, ClockTime, Pipeline, SeekFlags};
 use std::time::{Duration, Instant};
+use thiserror::Error;
+
+#[derive(Error, Debug)]
+enum UpdateError {
+    #[error("Failed to change pipeline state")]
+    StateChange(#[from] gst::StateChangeError),
+    #[error("{0}")]
+    GlibError(#[from] gst::glib::BoolError),
+}
 
 /// Widget to control media playing
 pub struct Controller<W> {
@@ -14,7 +23,7 @@ pub struct Controller<W> {
     pipeline: Pipeline,
 
     /// Time "expected" for pipeline to be in.
-    /// Used to distinguish between cases of time 
+    /// Used to distinguish between cases of time
     /// being updated because media is played, or
     /// because of manual seeking.
     updated_time: Timeline,
@@ -28,9 +37,9 @@ pub struct Controller<W> {
 
 impl Controller<()> {
     /// Create new widget to controll pipeline playing.
-    /// 
+    ///
     /// Contains Play/Pause button and timeline position slider.
-    pub fn new(pipeline: Pipeline) -> impl Widget<PipelineData> {
+    pub fn build_widget(pipeline: Pipeline) -> impl Widget<PipelineData> {
         // Toggle play button
         let play_pause = Button::new(
             |data: &PipelineState, _env: &_| match data {
@@ -46,21 +55,20 @@ impl Controller<()> {
             |data: &PipelineData, _env: &_| {
                 if data.muted {
                     "🔈x".to_string()
-                }else if data.volume < 0.01 {
+                } else if data.volume < 0.01 {
                     "🔈".to_string()
-                }else if data.volume < 0.3 {
+                } else if data.volume < 0.3 {
                     "🔉".to_string()
-                }else{
+                } else {
                     "🔊".to_string()
                 }
             },
             |_ctx, data: &mut PipelineData, _env| {
                 data.muted = !data.muted;
             },
-        ).fix_width(40.0);
-        let volume_slider = Slider::new()
-            .lens(PipelineData::volume)
-            .fix_width(100.0);
+        )
+        .fix_width(40.0);
+        let volume_slider = Slider::new().lens(PipelineData::volume).fix_width(100.0);
         let controller = Controller {
             pipeline,
             timer_id: TimerToken::INVALID,
@@ -72,6 +80,41 @@ impl Controller<()> {
             .with_child(timeline_slider, 0.8)
             .with_child(muted_button, 0.0)
             .with_child(volume_slider, 0.0)
+    }
+}
+
+impl<W> Controller<W> {
+    fn update_pipeline(
+        &mut self,
+        old_data: &PipelineData,
+        data: &PipelineData,
+    ) -> Result<(), UpdateError> {
+        // Update pipeline state if needed
+        match (old_data.state, data.state) {
+            (PipelineState::Pause, PipelineState::Play) => {
+                self.pipeline.set_state(gstreamer::State::Playing)?;
+            }
+            (PipelineState::Play, PipelineState::Pause) => {
+                self.pipeline.set_state(gstreamer::State::Paused)?;
+            }
+            _ => {}
+        }
+        // Update timeline position if needed
+        if self.updated_time != data.timeline {
+            self.updated_time = data.timeline;
+            let time = data.timeline.frac * data.timeline.duration;
+            let position = ClockTime::from_nseconds(time as u64);
+            self.pipeline.seek_simple(SeekFlags::FLUSH, position)?;
+        }
+        // Update volume
+        if (old_data.volume - data.volume) > std::f64::EPSILON {
+            self.pipeline.set_property("volume", &data.volume)?;
+        }
+        if old_data.muted != data.muted {
+            self.pipeline.set_property("mute", &data.muted)?;
+        }
+
+        Ok(())
     }
 }
 
@@ -103,32 +146,18 @@ impl<W: Widget<PipelineData>> Widget<PipelineData> for Controller<W> {
         data: &PipelineData,
         env: &Env,
     ) {
-        // Update pipeline state if needed
-        match (old_data.state, data.state) {
-            (PipelineState::Pause, PipelineState::Play) => {
-                self.pipeline.set_state(gstreamer::State::Playing).unwrap();
-            }
-            (PipelineState::Play, PipelineState::Pause) => {
-                self.pipeline.set_state(gstreamer::State::Paused).unwrap();
-            }
-            _ => {}
-        }
-        // Update timeline position if needed
-        if self.updated_time != data.timeline {
-            self.updated_time = data.timeline;
-            let time = data.timeline.frac * data.timeline.duration;
-            let position = ClockTime::from_nseconds(time as u64);
-            self.pipeline
-                .seek_simple(SeekFlags::FLUSH, position)
-                .unwrap();
-        }
-        // Update volume
-        if old_data.volume != data.volume {
-            self.pipeline.set_property("volume", &data.volume).unwrap();
-        }
-        if old_data.muted != data.muted {
-            self.pipeline.set_property("mute", &data.muted).unwrap();
-        }
+        self.update_pipeline(old_data, data).unwrap_or_else(|e| {
+            log::error!(
+                "Failed to update pipeline state:\n\
+                    \told: {:?}\n\
+                    \tnew: {:?}\n\
+                    \tError: {}
+                ",
+                old_data,
+                data,
+                e
+            )
+        });
         self.inner.update(ctx, old_data, data, env)
     }
 
@@ -137,7 +166,7 @@ impl<W: Widget<PipelineData>> Widget<PipelineData> for Controller<W> {
             Event::Timer(id) if id == &self.timer_id && data.state == PipelineState::Play => {
                 ctx.request_paint();
                 data.timeline = get_timeline(&self.pipeline);
-                self.updated_time = data.timeline.clone();
+                self.updated_time = data.timeline;
 
                 let deadline = Instant::now() + Duration::from_millis(16);
                 self.timer_id = ctx.request_timer(deadline);
@@ -151,7 +180,7 @@ impl<W: Widget<PipelineData>> Widget<PipelineData> for Controller<W> {
                     // Schedule timeline updates
                     let deadline = Instant::now() + Duration::from_millis(16);
                     self.timer_id = ctx.request_timer(deadline);
-                }else{
+                } else {
                     data.state = PipelineState::Pause;
                 }
                 ctx.request_paint();
@@ -166,8 +195,8 @@ impl<W: Widget<PipelineData>> Widget<PipelineData> for Controller<W> {
 }
 
 fn get_timeline(pipeline: &Pipeline) -> Timeline {
-    let pos: ClockTime = pipeline.query_position().unwrap_or(ClockTime::none());
-    let dur: ClockTime = pipeline.query_duration().unwrap_or(ClockTime::none());
+    let pos: ClockTime = pipeline.query_position().unwrap_or_else(ClockTime::none);
+    let dur: ClockTime = pipeline.query_duration().unwrap_or_else(ClockTime::none);
     let pos = pos.nanoseconds().unwrap_or(0) as f64;
     let mut duration = dur.nanoseconds().unwrap_or(1) as f64;
     if duration == 0.0 {

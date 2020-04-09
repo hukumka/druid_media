@@ -1,13 +1,16 @@
+use crate::PipelineCreationError;
 use crate::{Controller, PipelineData};
 use druid::{
+    piet::Piet,
     piet::{ImageFormat, InterpolationMode, RenderContext},
     widget::Flex,
     BoxConstraints, Env, Event, EventCtx, LayoutCtx, LifeCycle, LifeCycleCtx, PaintCtx, Point,
     Rect, Size, UpdateCtx, Widget,
 };
-use gstreamer::{prelude::*, Pipeline};
+use gstreamer::{self as gst, prelude::*, Pipeline};
 use gstreamer_app::AppSink;
 use std::sync::{Arc, Mutex};
+use thiserror::Error;
 
 /// Video playing widget
 pub struct VideoPlayer {
@@ -15,28 +18,69 @@ pub struct VideoPlayer {
     sample: Arc<Mutex<Option<gstreamer::Sample>>>,
 }
 
+#[derive(Error, Debug)]
+enum PaintError {
+    /// Error originated from glib.
+    #[error("{0}")]
+    Glib(#[from] gst::glib::BoolError),
+    /// Sample was not set.
+    #[error("No sample available")]
+    NoSample,
+    /// Unable to read sample capabilities.
+    #[error("No capabilities set for sample.")]
+    NoCapsSet,
+    /// Error then trying to get sample buffer.
+    #[error("Unable to get sample buffer.")]
+    BufferError,
+    /// Error obtaining property from capabilities.
+    #[error("{0}")]
+    GetProperty(#[from] GetPropertyError),
+    /// Error originated in piet.
+    #[error("piet: {0}")]
+    Piet(#[from] druid::piet::Error),
+}
+
+#[derive(Error, Debug)]
+enum GetPropertyError {
+    #[error("No capabilities set for Caps.")]
+    NoCaps,
+    #[error("Property {0} not found.")]
+    NoProperty(&'static str),
+    #[error("{0}")]
+    Get(#[from] gst::structure::GetError<'static>),
+}
+
+type PietImage = <Piet<'static> as RenderContext>::Image;
+
 impl VideoPlayer {
     /// Create new video player with controller below.
-    pub fn new(uri: &str) -> impl Widget<PipelineData> {
-        let (pipeline, player) = Self::build_player(uri);
-        let controller = Controller::new(pipeline);
+    pub fn build_widget(uri: &str) -> Result<impl Widget<PipelineData>, PipelineCreationError> {
+        let (pipeline, player) = Self::build_player(uri)?;
+        let controller = Controller::build_widget(pipeline);
 
-        Flex::column()
+        let res = Flex::column()
             .with_child(player, 1.0)
-            .with_child(controller, 0.0)
+            .with_child(controller, 0.0);
+        Ok(res)
     }
 
-    fn build_player(uri: &str) -> (Pipeline, VideoPlayer) {
+    fn build_player(uri: &str) -> Result<(Pipeline, VideoPlayer), PipelineCreationError> {
+        // Create shared storage for samples used in painting
+        // as well as video receiving callbacks
         let sample = Arc::new(Mutex::new(None));
         let shared_sample = Arc::clone(&sample);
         let shared_sample_preroll = Arc::clone(&sample);
 
-        let pipeline = gstreamer::ElementFactory::make("playbin", None).unwrap();
-        let appsink = gstreamer::ElementFactory::make("appsink", Some("sink")).unwrap();
+        let pipeline = gstreamer::ElementFactory::make("playbin", None)?;
+        let appsink = gstreamer::ElementFactory::make("appsink", Some("sink"))?;
 
-        let pipeline = pipeline.dynamic_cast::<Pipeline>().unwrap();
-       
-        let appsink: AppSink = appsink.dynamic_cast().unwrap();
+        let pipeline = pipeline
+            .dynamic_cast::<Pipeline>()
+            .expect("Playbin should always be a pipeline.");
+
+        let appsink: AppSink = appsink
+            .dynamic_cast()
+            .expect("Appsink should be instance of `AppSink`.");
         // Force RGBA pixel format, since it's only one druid supports
         // (it does support Rgb, but it being converted into rgba under the hood, so no point in using it)
         let caps = gstreamer::Caps::builder("video/x-raw")
@@ -67,14 +111,32 @@ impl VideoPlayer {
                 })
                 .build(),
         );
-        pipeline.set_property("uri", &Some(uri)).unwrap();
-        pipeline.set_property("video-sink", &appsink).unwrap();
+        pipeline.set_property("uri", &Some(uri))?;
+        pipeline.set_property("video-sink", &appsink)?;
 
-        pipeline.set_state(gstreamer::State::Paused).unwrap();
+        pipeline.set_state(gstreamer::State::Paused)?;
 
         let player = VideoPlayer { sample };
 
-        (pipeline, player)
+        Ok((pipeline, player))
+    }
+
+    fn get_sample_image(&self, paint_ctx: &mut PaintCtx) -> Result<(PietImage, Size), PaintError> {
+        let lock = self.sample.lock().expect("Sample mutex got poisoned.");
+        let sample = lock.as_ref().ok_or(PaintError::NoSample)?;
+        let caps = sample.get_caps().ok_or(PaintError::NoCapsSet)?;
+        let width: i32 = caps_property(caps, "width")?;
+        let height: i32 = caps_property(caps, "height")?;
+        let data = sample.get_buffer().ok_or(PaintError::BufferError)?;
+        let map = data.map_readable()?;
+
+        let image = paint_ctx.render_ctx.make_image(
+            width as usize,
+            height as usize,
+            map.as_slice(),
+            ImageFormat::RgbaPremul,
+        )?;
+        Ok((image, Size::new(width as f64, height as f64)))
     }
 }
 
@@ -89,31 +151,20 @@ impl Widget<PipelineData> for VideoPlayer {
     }
 
     fn paint(&mut self, paint_ctx: &mut PaintCtx, _data: &PipelineData, _env: &Env) {
-        let sample = {
-            let guard = self.sample.lock().unwrap();
-            guard.clone()
-        };
-        if let Some(sample) = sample {
-            let caps = sample.get_caps().unwrap();
-            let width: i32 = caps_property(caps, "width");
-            let height: i32 = caps_property(caps, "height");
-            let data = sample.get_buffer().unwrap();
-            let map = data.map_readable().unwrap();
-
-            let image = paint_ctx
-                .render_ctx
-                .make_image(
-                    width as usize,
-                    height as usize,
-                    map.as_slice(),
-                    ImageFormat::RgbaPremul,
-                )
-                .unwrap();
-            let widget_rect = Rect::from_origin_size(Point::ORIGIN, paint_ctx.size());
-            let video_rect = fit_video_rect(&widget_rect, width, height);
-            paint_ctx
-                .render_ctx
-                .draw_image(&image, video_rect, InterpolationMode::Bilinear);
+        match self.get_sample_image(paint_ctx) {
+            Ok((image, size)) => {
+                let widget_rect = Rect::from_origin_size(Point::ORIGIN, paint_ctx.size());
+                let video_rect = fit_video_rect(&widget_rect, &size);
+                paint_ctx
+                    .render_ctx
+                    .draw_image(&image, video_rect, InterpolationMode::Bilinear);
+            }
+            Err(PaintError::NoSample) => {
+                log::debug!("No video sample to paint.");
+            }
+            Err(e) => {
+                log::error!("{}", e);
+            }
         }
     }
 
@@ -143,15 +194,19 @@ impl Widget<PipelineData> for VideoPlayer {
 /// Get property from capabilities structure. Panics if such property does not exist
 fn caps_property<'a, T: gstreamer::glib::value::FromValueOptional<'a>>(
     caps: &'a gstreamer::CapsRef,
-    name: &str,
-) -> T {
-    caps.iter().next().unwrap().get(name).unwrap().unwrap()
+    name: &'static str,
+) -> Result<T, GetPropertyError> {
+    let cap = caps.iter().next().ok_or_else(|| GetPropertyError::NoCaps)?;
+    let property = cap
+        .get(name)?
+        .ok_or_else(|| GetPropertyError::NoProperty(name))?;
+    Ok(property)
 }
 
 /// Calculate maximum rect that fit `base_rect` and has aspect ration of `width/height`
-fn fit_video_rect(base_rect: &Rect, width: i32, height: i32) -> Rect {
-    let w = width as f64;
-    let h = height as f64;
+fn fit_video_rect(base_rect: &Rect, size: &Size) -> Rect {
+    let w = size.width;
+    let h = size.height;
     if base_rect.width() / base_rect.height() > w / h {
         // Box to wide
         let new_w = base_rect.height() * w / h;

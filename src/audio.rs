@@ -1,16 +1,20 @@
+use crate::PipelineCreationError;
 use crate::{Controller, PipelineData};
 use druid::Widget;
 use gstreamer::{prelude::*, Pipeline, State};
 
 pub struct AudioPlayer;
 
-impl AudioPlayer{
-    pub fn new(uri: &str) -> impl Widget<PipelineData> {
-        let pipeline = gstreamer::ElementFactory::make("playbin", None).unwrap();
-        let pipeline = pipeline.dynamic_cast::<Pipeline>().unwrap();
-        pipeline.set_property("uri", &Some(uri)).unwrap();
-        pipeline.set_state(State::Paused).unwrap();
+impl AudioPlayer {
+    /// Create new audio player widget
+    pub fn build_widget(uri: &str) -> Result<impl Widget<PipelineData>, PipelineCreationError> {
+        let pipeline = gstreamer::ElementFactory::make("playbin", None)?;
+        let pipeline = pipeline
+            .dynamic_cast::<Pipeline>()
+            .expect("Created element should always be a pipeline.");
+        pipeline.set_property("uri", &Some(uri))?;
+        pipeline.set_state(State::Paused)?;
 
-        Controller::new(pipeline)
+        Ok(Controller::build_widget(pipeline))
     }
 }

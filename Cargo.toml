@@ -9,6 +9,8 @@ edition = "2018"
 [dependencies]
 druid = {git = "https://github.com/xi-editor/druid", features = ["image"]}
 
+thiserror = "1.0"
+log = "0.4"
 gstreamer = "0.15"
 gstreamer-app = "0.15"
 gstreamer-video = "0.15"

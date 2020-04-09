@@ -1,11 +1,9 @@
-use druid_media::{PipelineData, AudioPlayer};
+use druid_media::{AudioPlayer, PipelineData};
 
 use druid::{AppLauncher, Widget, WindowDesc};
 use gstreamer;
 
-const URI_EXAMPLES: [&'static str; 1] = [
-    "file:///F:/Music/benn_beauty_of_annihilation_2017.mp3"
-];
+const URI_EXAMPLES: [&'static str; 1] = ["file:///F:/Music/benn_beauty_of_annihilation_2017.mp3"];
 
 fn main() {
     gstreamer::init().unwrap();
@@ -18,5 +16,5 @@ fn main() {
 }
 
 fn ui_builder() -> impl Widget<PipelineData> {
-    AudioPlayer::new(URI_EXAMPLES[0])
+    AudioPlayer::build_widget(URI_EXAMPLES[0]).unwrap()
 }

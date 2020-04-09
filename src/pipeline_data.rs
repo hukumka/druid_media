@@ -8,7 +8,6 @@ pub struct PipelineData {
     pub(crate) muted: bool,
 }
 
-
 #[derive(Lens, Copy, Clone, PartialEq, Debug)]
 pub struct Timeline {
     pub frac: f64,
@@ -32,12 +31,23 @@ impl PipelineData {
     }
 }
 
+impl Default for PipelineData {
+    fn default() -> Self {
+        PipelineData::new()
+    }
+}
+
 impl Timeline {
     pub fn new() -> Self {
         Self {
             frac: 0.0,
             duration: 0.0,
         }
+    }
+}
+impl Default for Timeline {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

@@ -20,5 +20,5 @@ fn main() {
 }
 
 fn ui_builder() -> impl Widget<PipelineData> {
-    VideoPlayer::new(URI_EXAMPLES[0])
+    VideoPlayer::build_widget(URI_EXAMPLES[0]).unwrap()
 }
