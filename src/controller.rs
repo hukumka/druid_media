@@ -45,7 +45,8 @@ impl Controller<()> {
             |data: &PipelineState, _env: &_| match data {
                 PipelineState::Play => "⏸️".into(),
                 PipelineState::Pause => "▶".into(),
-            },
+            }
+        ).on_click(
             |_ctx, _data: &mut PipelineState, _env| {},
         )
         .fix_width(40.0)
@@ -62,7 +63,8 @@ impl Controller<()> {
                 } else {
                     "🔊".to_string()
                 }
-            },
+            }
+        ).on_click(
             |_ctx, data: &mut PipelineData, _env| {
                 data.muted = !data.muted;
             },
@@ -76,10 +78,10 @@ impl Controller<()> {
             inner: play_pause,
         };
         Flex::row()
-            .with_child(controller, 0.0)
-            .with_child(timeline_slider, 0.8)
-            .with_child(muted_button, 0.0)
-            .with_child(volume_slider, 0.0)
+            .with_child(controller)
+            .with_flex_child(timeline_slider, 1.0)
+            .with_child(muted_button)
+            .with_child(volume_slider)
     }
 }
 

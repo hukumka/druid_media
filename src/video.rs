@@ -59,8 +59,8 @@ impl VideoPlayer {
         let controller = Controller::build_widget(pipeline);
 
         let res = Flex::column()
-            .with_child(player, 1.0)
-            .with_child(controller, 0.0);
+            .with_flex_child(player, 1.0)
+            .with_child(controller);
         Ok(res)
     }
 
