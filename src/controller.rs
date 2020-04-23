@@ -41,36 +41,30 @@ impl Controller<()> {
     /// Contains Play/Pause button and timeline position slider.
     pub fn build_widget(pipeline: Pipeline) -> impl Widget<PipelineData> {
         // Toggle play button
-        let play_pause = Button::new(
-            |data: &PipelineState, _env: &_| match data {
-                PipelineState::Play => "⏸️".into(),
-                PipelineState::Pause => "▶".into(),
-            }
-        ).on_click(
-            |_ctx, _data: &mut PipelineState, _env| {},
-        )
+        let play_pause = Button::new(|data: &PipelineState, _env: &_| match data {
+            PipelineState::Play => "⏸️".into(),
+            PipelineState::Pause => "▶".into(),
+        })
+        .on_click(|_ctx, _data: &mut PipelineState, _env| {})
         .fix_width(40.0)
         .lens(PipelineData::state);
         let timeline_slider = Slider::new()
             .lens(PipelineData::timeline.then(Timeline::frac))
             .expand_width();
-        let muted_button = Button::new(
-            |data: &PipelineData, _env: &_| {
-                if data.muted {
-                    "🔈x".to_string()
-                } else if data.volume < 0.01 {
-                    "🔈".to_string()
-                } else if data.volume < 0.3 {
-                    "🔉".to_string()
-                } else {
-                    "🔊".to_string()
-                }
+        let muted_button = Button::new(|data: &PipelineData, _env: &_| {
+            if data.muted {
+                "🔈x".to_string()
+            } else if data.volume < 0.01 {
+                "🔈".to_string()
+            } else if data.volume < 0.3 {
+                "🔉".to_string()
+            } else {
+                "🔊".to_string()
             }
-        ).on_click(
-            |_ctx, data: &mut PipelineData, _env| {
-                data.muted = !data.muted;
-            },
-        )
+        })
+        .on_click(|_ctx, data: &mut PipelineData, _env| {
+            data.muted = !data.muted;
+        })
         .fix_width(40.0);
         let volume_slider = Slider::new().lens(PipelineData::volume).fix_width(100.0);
         let controller = Controller {
@@ -84,6 +78,14 @@ impl Controller<()> {
             .with_flex_child(timeline_slider, 1.0)
             .with_child(muted_button)
             .with_child(volume_slider)
+    }
+}
+
+impl<W> Drop for Controller<W> {
+    fn drop(&mut self) {
+        // Must set pipeline state to null or
+        // memory leak go brrr
+        self.pipeline.set_state(gstreamer::State::Null).unwrap();
     }
 }
 

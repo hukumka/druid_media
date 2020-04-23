@@ -66,7 +66,10 @@ impl VideoPlayer {
     }
 
     /// Create new video player with thumbnail and controller below.
-    pub fn build_widget_with_thumbnail(uri: &str, thumbnail: impl Widget<()> + 'static) -> Result<impl Widget<PipelineData>, PipelineCreationError> {
+    pub fn build_widget_with_thumbnail(
+        uri: &str,
+        thumbnail: impl Widget<()> + 'static,
+    ) -> Result<impl Widget<PipelineData>, PipelineCreationError> {
         let (pipeline, player) = Self::build_player(uri, Some(Box::new(thumbnail)))?;
         let controller = Controller::build_widget(pipeline);
 
@@ -74,10 +77,12 @@ impl VideoPlayer {
             .with_flex_child(player, 1.0)
             .with_child(controller);
         Ok(res)
-
     }
 
-    fn build_player(uri: &str, thumbnail: Option<Box<dyn Widget<()>>>) -> Result<(Pipeline, VideoPlayer), PipelineCreationError> {
+    fn build_player(
+        uri: &str,
+        thumbnail: Option<Box<dyn Widget<()>>>,
+    ) -> Result<(Pipeline, VideoPlayer), PipelineCreationError> {
         // Create shared storage for samples used in painting
         // as well as video receiving callbacks
         let sample = Arc::new(Mutex::new(None));
@@ -127,10 +132,7 @@ impl VideoPlayer {
         pipeline.set_property("uri", &Some(uri))?;
         pipeline.set_property("video-sink", &appsink)?;
 
-        let player = VideoPlayer { 
-            sample,
-            thumbnail,
-        };
+        let player = VideoPlayer { sample, thumbnail };
 
         Ok((pipeline, player))
     }
@@ -163,7 +165,7 @@ impl Widget<PipelineData> for VideoPlayer {
         _env: &Env,
     ) {
         if let Some(thumbnail) = &mut self.thumbnail {
-            thumbnail.lifecycle(_ctx, _event,&(), _env);
+            thumbnail.lifecycle(_ctx, _event, &(), _env);
         }
     }
 
