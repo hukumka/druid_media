@@ -114,8 +114,6 @@ impl VideoPlayer {
         pipeline.set_property("uri", &Some(uri))?;
         pipeline.set_property("video-sink", &appsink)?;
 
-        pipeline.set_state(gstreamer::State::Paused)?;
-
         let player = VideoPlayer { sample };
 
         Ok((pipeline, player))

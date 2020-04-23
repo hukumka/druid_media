@@ -1,7 +1,7 @@
 use druid_media::{PipelineData, VideoPlayer};
 
 use druid::{AppLauncher, Widget, WindowDesc};
-use gstreamer;
+use druid_media::gstreamer;
 
 const URI_EXAMPLES: [&'static str; 3] = [
     "https://matrix-client.matrix.org/_matrix/media/r0/download/matrix.org/IYfzAwoWvuyEnVTBvKZMcOCh",

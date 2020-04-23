@@ -51,7 +51,9 @@ impl Controller<()> {
         )
         .fix_width(40.0)
         .lens(PipelineData::state);
-        let timeline_slider = Slider::new().lens(PipelineData::timeline.then(Timeline::frac));
+        let timeline_slider = Slider::new()
+            .lens(PipelineData::timeline.then(Timeline::frac))
+            .expand_width();
         let muted_button = Button::new(
             |data: &PipelineData, _env: &_| {
                 if data.muted {
