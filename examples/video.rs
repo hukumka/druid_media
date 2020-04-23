@@ -1,6 +1,7 @@
 use druid_media::{PipelineData, VideoPlayer};
 
 use druid::{AppLauncher, Widget, WindowDesc};
+use druid::widget::{Label, WidgetExt};
 use druid_media::gstreamer;
 
 const URI_EXAMPLES: [&'static str; 3] = [
@@ -20,5 +21,7 @@ fn main() {
 }
 
 fn ui_builder() -> impl Widget<PipelineData> {
-    VideoPlayer::build_widget(URI_EXAMPLES[0]).unwrap()
+    let thumbnail = Label::new("Video thumbnail")
+        .center();
+    VideoPlayer::build_widget_with_thumbnail(URI_EXAMPLES[0], thumbnail).unwrap()
 }

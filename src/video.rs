@@ -16,6 +16,7 @@ use thiserror::Error;
 pub struct VideoPlayer {
     /// Current sample to display. Updated via pipeline callbacks
     sample: Arc<Mutex<Option<gstreamer::Sample>>>,
+    thumbnail: Option<Box<dyn Widget<()>>>,
 }
 
 #[derive(Error, Debug)]
@@ -55,7 +56,7 @@ type PietImage = <Piet<'static> as RenderContext>::Image;
 impl VideoPlayer {
     /// Create new video player with controller below.
     pub fn build_widget(uri: &str) -> Result<impl Widget<PipelineData>, PipelineCreationError> {
-        let (pipeline, player) = Self::build_player(uri)?;
+        let (pipeline, player) = Self::build_player(uri, None)?;
         let controller = Controller::build_widget(pipeline);
 
         let res = Flex::column()
@@ -64,7 +65,19 @@ impl VideoPlayer {
         Ok(res)
     }
 
-    fn build_player(uri: &str) -> Result<(Pipeline, VideoPlayer), PipelineCreationError> {
+    /// Create new video player with thumbnail and controller below.
+    pub fn build_widget_with_thumbnail(uri: &str, thumbnail: impl Widget<()> + 'static) -> Result<impl Widget<PipelineData>, PipelineCreationError> {
+        let (pipeline, player) = Self::build_player(uri, Some(Box::new(thumbnail)))?;
+        let controller = Controller::build_widget(pipeline);
+
+        let res = Flex::column()
+            .with_flex_child(player, 1.0)
+            .with_child(controller);
+        Ok(res)
+
+    }
+
+    fn build_player(uri: &str, thumbnail: Option<Box<dyn Widget<()>>>) -> Result<(Pipeline, VideoPlayer), PipelineCreationError> {
         // Create shared storage for samples used in painting
         // as well as video receiving callbacks
         let sample = Arc::new(Mutex::new(None));
@@ -114,7 +127,10 @@ impl VideoPlayer {
         pipeline.set_property("uri", &Some(uri))?;
         pipeline.set_property("video-sink", &appsink)?;
 
-        let player = VideoPlayer { sample };
+        let player = VideoPlayer { 
+            sample,
+            thumbnail,
+        };
 
         Ok((pipeline, player))
     }
@@ -146,11 +162,17 @@ impl Widget<PipelineData> for VideoPlayer {
         _data: &PipelineData,
         _env: &Env,
     ) {
+        if let Some(thumbnail) = &mut self.thumbnail {
+            thumbnail.lifecycle(_ctx, _event,&(), _env);
+        }
     }
 
     fn paint(&mut self, paint_ctx: &mut PaintCtx, _data: &PipelineData, _env: &Env) {
         match self.get_sample_image(paint_ctx) {
             Ok((image, size)) => {
+                // Drop thumbnail?
+                self.thumbnail = None;
+
                 let widget_rect = Rect::from_origin_size(Point::ORIGIN, paint_ctx.size());
                 let video_rect = fit_video_rect(&widget_rect, &size);
                 paint_ctx
@@ -158,7 +180,9 @@ impl Widget<PipelineData> for VideoPlayer {
                     .draw_image(&image, video_rect, InterpolationMode::Bilinear);
             }
             Err(PaintError::NoSample) => {
-                log::debug!("No video sample to paint.");
+                if let Some(thumbnail) = &mut self.thumbnail {
+                    thumbnail.paint(paint_ctx, &(), _env);
+                }
             }
             Err(e) => {
                 log::error!("{}", e);
@@ -182,10 +206,16 @@ impl Widget<PipelineData> for VideoPlayer {
         _data: &PipelineData,
         _env: &Env,
     ) -> Size {
+        if let Some(thumbnail) = &mut self.thumbnail {
+            let _size = thumbnail.layout(_ctx, bc, &(), _env);
+        }
         bc.max()
     }
 
     fn event(&mut self, _ctx: &mut EventCtx, _event: &Event, _data: &mut PipelineData, _env: &Env) {
+        if let Some(thumbnail) = &mut self.thumbnail {
+            thumbnail.event(_ctx, _event, &mut (), _env);
+        }
     }
 }
 
